@@ -1,8 +1,9 @@
 # coding=utf-8
 
 from io import open  # compatible enconding parameter
-from setuptools import setup, find_packages
 from os import path
+
+from setuptools import find_packages, setup
 
 __version__ = '0.0.1'
 
@@ -33,7 +34,7 @@ dependency_links = [
 setup(
     name='pystream',
     version=__version__,
-    description='Python implementation of the STREAM hydrological rainfall-runoff model',
+    description='Python STREAM hydrological rainfall-runoff model',
     long_description=long_description,
     long_description_content_type='text/markdown',
     classifiers=classifiers,
