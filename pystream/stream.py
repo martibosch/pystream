@@ -27,7 +27,7 @@ class StreamSimulation:
     Mechanistic model (instead of empirical fits e.g., Machine Learning)
     """
 
-    def __init__(self, dem, slope, whc, cropf, res):
+    def __init__(self, dem, slope, whc, cropf, res, init_parameters={}):
         if isinstance(dem, richdem.rdarray):
             self.dem = dem
         else:
@@ -52,15 +52,17 @@ class StreamSimulation:
         self.ground_water = np.zeros_like(dem)
 
         # Parameters
-        self.TEMP_SNOW_MELT = 0
-        self.SNOW_MELT_COEFF = 15
-        self.SNOW_MELT_SHIFT = 3
+        self.TEMP_SNOW_FALL = init_parameters.get('TEMP_SNOW_FALL', 2)
+        self.TEMP_SNOW_MELT = init_parameters.get('TEMP_SNOW_MELT', 0)
+        self.SNOW_MELT_COEFF = init_parameters.get('SNOW_MELT_COEFF', 15)
+        # self.SNOW_MELT_SHIFT = init_parameters.get('SNOW_MELT_SHIFT', 0)
 
-        self.CROPF_COEFF = 1.5
+        self.CROPF_COEFF = init_parameters.get('CROPF_COEFF', 1.5)
+        self.WHC_COEFF = init_parameters.get('WHC_COEFF', 1.5)
 
-        self.HEATcal = .2
-        self.TOGWcal = .5
-        self.Ccal = 2
+        # self.HEAT = init_parameters.get('HEAT', .2)
+        self.TOGW = init_parameters.get('TOGW', .5)
+        self.C = init_parameters.get('C', 2)
         # TODO: self.WHCcal = 1
         # not to be calibrated, but must be there and the user might change it
 
@@ -76,7 +78,7 @@ class StreamSimulation:
         snow_accum_prev = self.snow_accum
         liquid_prec_i, snow_accum_i = models.snow(
             prec_i, temp_avg_i, temp_max_i, snow_accum_prev,
-            self.TEMP_SNOW_MELT, self.SNOW_MELT_COEFF, self.SNOW_MELT_SHIFT)
+            self.TEMP_SNOW_FALL, self.TEMP_SNOW_MELT, self.SNOW_MELT_COEFF)
         # update snow accumulation for next iteration
         self.snow_accum = snow_accum_i
         # return liquid_prec_i, snow_accum_i
@@ -84,25 +86,30 @@ class StreamSimulation:
         # Potential evotranspiration (Thornthwaite)
         pe_i = models.potential_evapotranspiration(
             temp_max_i, heat, A, self.cropf, self.CROPF_COEFF)
+        # ACHTUNG: pe_i is in mm/month ; how to handle timesteps?
+        # e.g. pe_i /= 30  # daily timestep
         # return pe_i
 
         # Soil storage (Thornthwaite-Mather)
         excess_i, available_water_i = models.soil_storage(
-            liquid_prec_i, pe_i, self.available_water, self.whc)
+            liquid_prec_i, pe_i, self.available_water, self.whc,
+            self.WHC_COEFF)
         # update available water for next iteration
         self.available_water = available_water_i
         # return excess_i, available_water_i
 
         # TODO: put this in models
         # Separate direct from delayed runoff
-        runoff_i = self.TOGWcal * excess_i
+        runoff_i = self.TOGW * excess_i
         to_ground_water_i = excess_i - runoff_i
 
         # Volume of ground water and base flow
         ground_water_i = self.ground_water + to_ground_water_i
-        base_flow_i = ground_water_i / (self.slope * self.Ccal)  # [mm]
+        base_flow_i = ground_water_i / (self.slope * self.C)  # [mm]
         # update ground water for the next iteration
         self.ground_water = ground_water_i - base_flow_i
+        # ACHTUNG
+        # self.base_flow = base_flow_i
 
         # Discharge (snow melt + runoff + base flow)
         discharge_i = runoff_i + base_flow_i

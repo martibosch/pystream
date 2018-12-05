@@ -1,20 +1,20 @@
 import numpy as np
 
 
-def snow(prec_i, temp_avg_i, temp_max_i, snow_accum_prev, TEMP_SNOW_MELT,
-         SNOW_MELT_COEFF, SNOW_MELT_SHIFT):
+def snow(prec_i, temp_avg_i, temp_max_i, snow_accum_prev, TEMP_SNOW_FALL,
+         TEMP_SNOW_MELT, SNOW_MELT_COEFF):
     # TODO: separate TEMP_SNOW_FALL from TEMP_SNOW_MELT?
     # Snow
     snowfall_i = np.copy(prec_i)  # [kg]
     # at high temp no snow
-    snowfall_i[temp_avg_i > TEMP_SNOW_MELT] = 0
+    snowfall_i[temp_avg_i > TEMP_SNOW_FALL] = 0
     # add snow accumulated from previous iterations (months)
     snow_accum_i = snow_accum_prev + snowfall_i  # [kg]
     # how much snow would melt at each pixel given its temperature
     # ACHTUNG: use maximum temperature here
-    snow_melt_i = SNOW_MELT_COEFF * (temp_max_i + SNOW_MELT_SHIFT)  # [kg]
+    snow_melt_i = SNOW_MELT_COEFF * temp_max_i  # [kg]
     # at low temp no snow melts ACHTUNG: use maximum temperature here
-    snow_melt_i[(temp_max_i + SNOW_MELT_SHIFT) < TEMP_SNOW_MELT] = 0
+    snow_melt_i[temp_max_i < TEMP_SNOW_MELT] = 0
     # no more snow can melt than the snow that there actually is
     snow_melt_i = np.minimum(snow_accum_i, snow_melt_i)
     # substract the melted snow from the snow accumulation
@@ -44,25 +44,34 @@ def potential_evapotranspiration(temp_max_i, heat, A, cropf, CROPF_COEFF):
     return pe_i
 
 
-def soil_storage(liquid_prec_i, pe_i, available_water_prev, whc):
+def soil_storage(liquid_prec_i, pe_i, available_water_prev, whc, WHC_COEFF):
     prec_eff_i = liquid_prec_i - pe_i
+    whc_ = whc * WHC_COEFF
     # start with the water available at the end of the previous iteration
     available_water_i = np.copy(available_water_prev)
     excess_i = np.zeros_like(prec_eff_i)
     # soil is wetting below capacity
-    below_cap = available_water_prev + prec_eff_i <= whc
+    below_cap = available_water_prev + prec_eff_i <= whc_
+    # print('below cap at {} % of pixels'.format(
+    #     below_cap.sum() * 100 / prec_eff_i.size))
     excess_i[below_cap] = 0
     available_water_i[below_cap] = available_water_prev[below_cap] + \
         prec_eff_i[below_cap]
     # soil is wetting above capacity
-    above_cap = available_water_prev + prec_eff_i > whc
+    above_cap = available_water_prev + prec_eff_i > whc_
+    # print('above cap at {} % of pixels'.format(
+    #     above_cap.sum() * 100 / prec_eff_i.size))
     excess_i[above_cap] = available_water_prev[above_cap] + \
-        prec_eff_i[above_cap] - whc[above_cap]
-    available_water_i[above_cap] = whc[above_cap]
+        prec_eff_i[above_cap] - whc_[above_cap]
+    available_water_i[above_cap] = whc_[above_cap]
     # soil is drying
     drying = prec_eff_i <= 0
+    # print('drying at {} % of pixels'.format(
+    #     drying.sum() * 100 / prec_eff_i.size))
     excess_i[drying] = 0
     available_water_i[drying] = available_water_prev[drying] * np.exp(
-        prec_eff_i[drying] / whc[drying])
+        prec_eff_i[drying] / whc_[drying])
+    # print(np.mean(available_water_i / whc))
+    # print()
 
     return excess_i, available_water_i
