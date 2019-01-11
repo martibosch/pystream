@@ -71,6 +71,50 @@ class StreamSimulation:
         # TODO: self.flux_i
         # TODO: self.time_step
 
+    def simulation_step_daily(self, prec_i, temp_avg_i, temp_max_i, heat, A,
+                              daylight_hours):
+        K = .69
+        # Potential evotranspiration (Thornthwaite)
+        pe_i = models.potential_evapotranspiration_daily(
+            temp_avg_i, temp_max_i, heat, A, self.cropf, daylight_hours, K,
+            self.CROPF_COEFF)
+
+        # Soil storage (Thornthwaite-Mather)
+        excess_i, available_water_i = models.soil_storage(
+            prec_i, pe_i, self.available_water, self.whc, self.WHC_COEFF)
+        # update available water for next iteration
+        self.available_water = available_water_i
+        # return excess_i, available_water_i
+
+        # TODO: put this in models
+        # Separate direct from delayed runoff
+        runoff_i = (1 - self.TOGW) * excess_i
+        to_ground_water_i = excess_i - runoff_i
+
+        # Volume of ground water and base flow
+        ground_water_i = self.ground_water + to_ground_water_i
+        # base_flow_i = ground_water_i / (self.slope * self.C)  # [mm]
+        base_flow_i = ground_water_i * self.C  # [mm]
+        # base_flow_i = ground_water_i / self.slope  # [mm]
+        # base_flow_i = self.ground_water * np.exp(
+        #     -self.C) + to_ground_water_i * (1 - np.exp(-self.C))
+        # update ground water for the next iteration
+        self.ground_water = ground_water_i - base_flow_i
+        # ACHTUNG
+        # self.base_flow = base_flow_i
+
+        # Discharge (snow melt + runoff + base flow)
+        discharge_i = runoff_i + base_flow_i
+        discharge_i = (discharge_i / 1000) * self.res[0] * self.res[1]  # [m^3]
+
+        flow_i = richdem.FlowAccumulation(self.dem, method='D8',
+                                          weights=discharge_i)
+
+        # Assume that maximum flow corresponds to the gauge station
+        gauge_flow_i = flow_i.max().item()
+
+        return gauge_flow_i
+
     def simulation_step(self, prec_i, temp_avg_i, temp_max_i, heat, A):
 
         # Snow
@@ -100,12 +144,14 @@ class StreamSimulation:
 
         # TODO: put this in models
         # Separate direct from delayed runoff
-        runoff_i = self.TOGW * excess_i
+        runoff_i = (
+            1 - self.TOGW) * excess_i  # runoff_i = self.TOGW * excess_i
         to_ground_water_i = excess_i - runoff_i
 
         # Volume of ground water and base flow
         ground_water_i = self.ground_water + to_ground_water_i
-        base_flow_i = ground_water_i / (self.slope * self.C)  # [mm]
+        # base_flow_i = ground_water_i / (self.slope * self.C)  # [mm]
+        base_flow_i = ground_water_i * self.C  # [mm]
         # update ground water for the next iteration
         self.ground_water = ground_water_i - base_flow_i
         # ACHTUNG

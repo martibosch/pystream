@@ -25,6 +25,30 @@ def snow(prec_i, temp_avg_i, temp_max_i, snow_accum_prev, TEMP_SNOW_FALL,
     return liquid_prec_i, snow_accum_i
 
 
+def potential_evapotranspiration_daily(temp_avg_i, temp_max_i, heat, A, cropf,
+                                       daylight_hours, K, CROPF_COEFF):
+    tef_i = K * (temp_max_i - temp_avg_i) * (daylight_hours /
+                                             (24 - daylight_hours))
+    pe_i = np.full_like(temp_max_i, np.nan)
+    high_temp_cond = tef_i >= 26.5
+    pe_i[high_temp_cond] = -415.85 + 32.24 * tef_i[high_temp_cond] - \
+        .43 * tef_i[high_temp_cond]**2
+    mid_temp_cond = (tef_i > 0) & (tef_i < 26.5)
+    # TODO: how to handle HEATcal: does heat change at any simulation step?
+    # pe_i[mid_temp_cond] = 16 * np.power(
+    #     10 * temp_max_i[mid_temp_cond] / heat[mid_temp_cond],
+    #     A[mid_temp_cond])
+    pe_i[mid_temp_cond] = 16 * (
+        (10 *
+         (temp_max_i[mid_temp_cond] / heat[mid_temp_cond]))**A[mid_temp_cond])
+    pe_i[tef_i <= 0] = 0
+    pe_i = pe_i * cropf * CROPF_COEFF
+    pe_i *= daylight_hours / 12
+    pe_i /= 30  # from mm/month to mm/days
+
+    return pe_i
+
+
 def potential_evapotranspiration(temp_max_i, heat, A, cropf, CROPF_COEFF):
     pe_i = np.full_like(temp_max_i, np.nan)
     high_temp_cond = temp_max_i >= 26.5
