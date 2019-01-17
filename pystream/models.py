@@ -1,18 +1,18 @@
 import numpy as np
 
 
-def snow(prec_i, temp_avg_i, temp_max_i, snow_accum_prev, TEMP_SNOW_FALL,
+def snow(prec_i, temp_max_i, temp_min_i, snow_accum_prev, TEMP_SNOW_FALL,
          TEMP_SNOW_MELT, SNOW_MELT_COEFF):
     # TODO: separate TEMP_SNOW_FALL from TEMP_SNOW_MELT?
     # Snow
     snowfall_i = np.copy(prec_i)  # [kg]
     # at high temp no snow
-    snowfall_i[temp_avg_i > TEMP_SNOW_FALL] = 0
+    snowfall_i[temp_min_i > TEMP_SNOW_FALL] = 0
     # add snow accumulated from previous iterations (months)
     snow_accum_i = snow_accum_prev + snowfall_i  # [kg]
     # how much snow would melt at each pixel given its temperature
     # ACHTUNG: use maximum temperature here
-    snow_melt_i = SNOW_MELT_COEFF * temp_max_i  # [kg]
+    snow_melt_i = SNOW_MELT_COEFF * (temp_max_i - TEMP_SNOW_MELT)  # [kg]
     # at low temp no snow melts ACHTUNG: use maximum temperature here
     snow_melt_i[temp_max_i < TEMP_SNOW_MELT] = 0
     # no more snow can melt than the snow that there actually is

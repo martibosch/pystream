@@ -115,13 +115,14 @@ class StreamSimulation:
 
         return gauge_flow_i
 
-    def simulation_step(self, prec_i, temp_avg_i, temp_max_i, heat, A):
+    def simulation_step(self, prec_i, temp_avg_i, temp_max_i, temp_min_i, heat,
+                        A):
 
         # Snow
         # snow accumulation from the previous iteration
         snow_accum_prev = self.snow_accum
         liquid_prec_i, snow_accum_i = models.snow(
-            prec_i, temp_avg_i, temp_max_i, snow_accum_prev,
+            prec_i, temp_max_i, temp_min_i, snow_accum_prev,
             self.TEMP_SNOW_FALL, self.TEMP_SNOW_MELT, self.SNOW_MELT_COEFF)
         # update snow accumulation for next iteration
         self.snow_accum = snow_accum_i
