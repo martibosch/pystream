@@ -44,7 +44,8 @@ class StreamSimulation:
         # TODO: self.flux_i
         # TODO: self.time_step
 
-    def simulation_step(self, prec_i, temp_i, year_heat_index, year_alpha):
+    def simulation_step(self, prec_i, temp_i, year_heat_index, year_alpha,
+                        daylight_hours=12):
 
         # SNOW
         # snow accumulation from the previous iteration
@@ -80,7 +81,7 @@ class StreamSimulation:
             (10 * (temp_i[mid_temp_cond] / year_heat_index[mid_temp_cond]))
             ** year_alpha[mid_temp_cond])  # yapf: disable
         pe_i[temp_i <= 0] = 0
-        pe_i *= self.cropf * self.CROPF_COEFF
+        pe_i *= (daylight_hours / 12) * self.cropf * self.CROPF_COEFF
 
         # SOIL STORAGE (Thornthwaite-Mather)
         # here we use two copies of the water available at the end of the last
