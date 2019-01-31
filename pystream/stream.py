@@ -1,36 +1,88 @@
 import numpy as np
+import rasterio
 import richdem
+import six
 
 __all__ = ['StreamSimulation']
 
 
 class StreamSimulation:
-    def __init__(self, dem, cropf, whc, res, init_parameters={}):
-        # TERRAIN DATA
-        if isinstance(dem, richdem.rdarray):
-            self.dem = dem
+    def __init__(self, dem, cropf, whc, res=None, nodata=-9999,
+                 whc_epsilon=.01, init_parameters={}):
+
+        #
+        # LOAD TERRAIN DATA
+        #
+
+        # DEM
+        if isinstance(dem, six.string_types):
+            with rasterio.open(dem) as dem_src:
+                self.dem = richdem.rdarray(
+                    dem_src.read(1).astype(np.double), no_data=dem_src.nodata)
+                # We assert that all rasters are aligned, so this should be
+                # the resolution of all rasters. We will be setting it as
+                # class attribute every time we read a raster file to ensure
+                # that we get the resolution when some terrain data is
+                # provided as ndarray
+                self.res = dem_src.res
+        elif isinstance(dem, np.ndarray):
+            # ensure that the self.dem is a `richdem.rdarray` (which is a
+            # subclass of `np.ndarray`)
+            if isinstance(dem, richdem.rdarray):
+                self.dem = dem
+            else:
+                # ACHTUNG with the nodata argument, since elevation could
+                # perfectly take negative values
+                self.dem = richdem.rdarray(
+                    dem.astype(np.double), no_data=nodata)
+
+        # CROP FACTOR
+        if isinstance(cropf, six.string_types):
+            with rasterio.open(cropf) as cropf_src:
+                self.cropf = cropf_src.read(1)
+                self.res = cropf_src.res  # See comment above `dem_src.res`
+        elif isinstance(cropf, np.ndarray):
+            self.cropf = cropf
+
+        # WATER HOLDING CAPACITY
+        if isinstance(whc, six.string_types):
+            with rasterio.open(whc) as whc_src:
+                self.whc = whc_src.read(1)
+                self.res = whc_src.res  # See comment above `dem_src.res`
+        elif isinstance(whc, np.ndarray):
+            self.whc = whc
+
+        # whc must be strictly positive, so we must replace all zero/negative
+        # pixels for an arbitrarily very small value
+        self.whc[self.whc <= 0] = whc_epsilon
+
+        if res is not None:
+            # If the resolution is explicitly provided, it takes preference
+            # over the resolution extracted from any of the rasters
+            self.res = res
         else:
-            # TODO: ensure that DEM is an ndarray
-            # dem must be double for rdarray
-            self.dem = richdem.rdarray(dem.astype(np.double), no_data=-1)
-        self.cropf = cropf
-        # TODO: what to do with WHCcal
-        # avoid division by zero
-        self.whc = whc
-        self.whc[whc <= 0] = .01  # epsilon
-        # TODO: allow fp as raster inputs and automatically extract resolution
-        # from tif
-        self.res = res
+            # Ensure that the resolution was provided in at least one raster
+            if not hasattr(self, 'res'):
+                raise ValueError(
+                    "If passing raster arrays (instead of filepaths), the "
+                    "resolution must be provided!")
+
+        if not (self.dem.shape == self.cropf.shape == self.whc.shape):
+            raise ValueError("Raster shapes do not match!")
 
         # TODO: CLIMATOLOGICAL DATA
 
         # STATE VARIABLES
         # TODO: verbose mode where the state variables are saved for each step
         # start with ones, which justifies why the model needs warmup
-        # ACHTUNG: this is the ndarray DEM, not the richdem
-        self.snow_accum = np.zeros_like(dem)
-        self.available_water = np.zeros_like(dem)
-        self.ground_water = np.zeros_like(dem)
+        # ACHTUNG: this is the richdem DEM, so it is better not to use
+        # `zeros_like` (because it would also return an rdarray). On the other
+        # hand, we can enforce a `np.double` data type in order to be
+        # consistent with the DEM's data type (remember that richdem enforces
+        # using doubles)
+        self.snow_accum = np.zeros(self.dem.shape, dtype=np.double)
+        self.available_water = np.zeros(self.dem.shape, dtype=np.double)
+        self.ground_water = np.zeros(self.dem.shape, dtype=np.double)
 
         # PARAMETERS
         self.TEMP_SNOW_FALL = init_parameters.get('TEMP_SNOW_FALL', 2)
