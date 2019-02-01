@@ -5,5 +5,4 @@ isort
 flake8
 flake8-per-file-ignores
 pytest
-tox-travis
 yapf
