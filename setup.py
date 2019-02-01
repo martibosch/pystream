@@ -30,7 +30,7 @@ dependency_links = [
 ]
 
 setup(
-    name='pystream',
+    name='pystream-model',
     version=__version__,
     description='Python STREAM hydrological rainfall-runoff model',
     long_description=long_description,

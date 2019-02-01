@@ -16,7 +16,7 @@ Installation / Usage
 
 To install use pip:
 
-    $ pip install pystream
+    $ pip install pystream-model
 
 
 Or clone the repo:
