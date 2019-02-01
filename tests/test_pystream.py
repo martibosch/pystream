@@ -6,11 +6,13 @@ import richdem
 import pystream as pst
 
 
-class TestStreamSimulation(unittest.TestCase):
+class TestMonthlySimulation(unittest.TestCase):
     def setUp(self):
         self.dem_fp = 'tests/input_data/dem.tif'
         self.cropf_fp = 'tests/input_data/cropf.tif'
         self.whc_fp = 'tests/input_data/whc.tif'
+        self.prec_fp = 'tests/input_data/prec.nc'
+        self.temp_fp = 'tests/input_data/temp.nc'
         self.res = (.05, .05)
 
     def test_io(self):
@@ -23,42 +25,52 @@ class TestStreamSimulation(unittest.TestCase):
 
         # instantiating a simulation with only raster arrays should raise
         # ValueError because of the missing information on resolution
-        self.assertRaises(ValueError, pst.StreamSimulation, dem_arr, cropf_arr,
-                          whc_arr)
+        self.assertRaises(ValueError, pst.MonthlySimulation, dem_arr,
+                          cropf_arr, whc_arr, self.prec_fp, self.temp_fp)
         # Check that the instance always gets the right resolution
         # if we provide arrays and an explicit resolution, we should be fine
         self.assertEqual(
-            pst.StreamSimulation(dem_arr, cropf_arr, whc_arr,
-                                 res=self.res).res, self.res)
+            pst.MonthlySimulation(dem_arr, cropf_arr, whc_arr, self.prec_fp,
+                                  self.temp_fp, res=self.res).res, self.res)
         # if we explicitly provide a different resolution, it takes preference
         self.assertEqual(
-            pst.StreamSimulation(dem_arr, cropf_arr, whc_arr, res=(1, 1)).res,
-            (1, 1))
+            pst.MonthlySimulation(dem_arr, cropf_arr, whc_arr, self.prec_fp,
+                                  self.temp_fp, res=(1, 1)).res, (1, 1))
         # we should also be fine if at least one of the raster datasets is
         # provided as filepath, since we will extract the resolution from there
         self.assertEqual(
-            pst.StreamSimulation(self.dem_fp, cropf_arr, whc_arr).res,
-            self.res)
+            pst.MonthlySimulation(self.dem_fp, cropf_arr, whc_arr,
+                                  self.prec_fp, self.temp_fp).res, self.res)
         self.assertEqual(
-            pst.StreamSimulation(dem_arr, self.cropf_fp, whc_arr).res,
-            self.res)
+            pst.MonthlySimulation(dem_arr, self.cropf_fp, whc_arr,
+                                  self.prec_ds, self.temp_ds).res, self.res)
         self.assertEqual(
-            pst.StreamSimulation(dem_arr, cropf_arr, self.whc_fp).res,
-            self.res)
+            pst.MonthlySimulation(
+                dem_arr,
+                cropf_arr,
+                self.whc_fp,
+                self.prec_ds,
+                self.temp_ds,
+            ).res, self.res)
 
         # instantiating a simulation with rasters of mistmatching shapes
         # should raise a ValueError
-        self.assertRaises(ValueError, pst.StreamSimulation, dem_arr[1:, 1:],
-                          self.cropf_fp, self.whc_fp)
-        self.assertRaises(ValueError, pst.StreamSimulation, self.dem_fp,
-                          cropf_arr[1:, 1:], self.whc_fp)
-        self.assertRaises(ValueError, pst.StreamSimulation, self.dem_fp,
-                          self.cropf_fp, whc_arr[1:, 1:])
+        self.assertRaises(ValueError, pst.MonthlySimulation, dem_arr[1:, 1:],
+                          self.cropf_fp, self.whc_fp, self.prec_ds,
+                          self.temp_ds)
+        self.assertRaises(ValueError, pst.MonthlySimulation, self.dem_fp,
+                          cropf_arr[1:, 1:], self.whc_fp, self.prec_ds,
+                          self.temp_ds)
+        self.assertRaises(ValueError, pst.MonthlySimulation, self.dem_fp,
+                          self.cropf_fp, whc_arr[1:, 1:], self.prec_ds,
+                          self.temp_ds)
 
         # test that in any case, the dem is an instance of richdem.rdarray
-        sts_from_arr = pst.StreamSimulation(dem_arr, cropf_arr, whc_arr,
-                                            res=self.res)
-        sts_from_fp = pst.StreamSimulation(self.dem_fp, cropf_arr, whc_arr)
+        sts_from_arr = pst.MonthlySimulation(dem_arr, cropf_arr, whc_arr,
+                                             self.prec_ds, self.temp_ds,
+                                             res=self.res)
+        sts_from_fp = pst.MonthlySimulation(self.dem_fp, cropf_arr, whc_arr,
+                                            self.prec_ds, self.temp_ds)
         self.assertIsInstance(sts_from_arr.dem, richdem.rdarray)
         self.assertIsInstance(sts_from_fp.dem, richdem.rdarray)
 
