@@ -1,13 +1,18 @@
 import numpy as np
 import rasterio
 import richdem
+import xarray as xr
 
-__all__ = ['StreamSimulation']
+__all__ = ['MonthlySimulation']
 
 
-class StreamSimulation:
-    def __init__(self, dem, cropf, whc, res=None, nodata=-9999,
-                 whc_epsilon=.01, init_parameters={}):
+class MonthlySimulation:
+    # TODO: more flexible approach
+    TIME_STEP = 2592000  # i.e., 30 * 24 * 3600 seconds per month
+
+    def __init__(self, dem, cropf, whc, prec, temp, prec_varname=None,
+                 temp_varname=None, res=None, nodata=-9999, whc_epsilon=.01,
+                 decode_times=False, init_parameters={}):
 
         #
         # LOAD TERRAIN DATA
@@ -69,7 +74,47 @@ class StreamSimulation:
         if not (self.dem.shape == self.cropf.shape == self.whc.shape):
             raise ValueError("Raster shapes do not match!")
 
-        # TODO: CLIMATOLOGICAL DATA
+        #
+        # CLIMATOLOGICAL DATA
+        #
+
+        # TODO: support ndarrays as climatological data?
+
+        # PRECIPITATION
+        if isinstance(prec, six.string_types):
+            self.prec_ds = xr.open_dataset(prec, decode_times=decode_times)
+        elif isinstance(prec, xr.Dataset):
+            self.prec_ds = prec
+
+        if prec_varname is None:
+            # get the name of the first variable, assert that the user has
+            # provided an appropriate dataset
+            for prec_varname, _ in self.prec_ds.data_vars.items():
+                break
+
+        self.prec_varname = prec_varname
+
+        # TEMPERATURE
+        if isinstance(temp, six.string_types):
+            self.temp_ds = xr.open_dataset(temp, decode_times=decode_times)
+        elif isinstance(temp, xr.Dataset):
+            self.temp_ds = temp
+
+        if temp_varname is None:
+            # get the name of the first variable, assert that the user has
+            # provided an appropriate dataset
+            for temp_varname, _ in self.temp_ds.data_vars.items():
+                break
+
+        self.temp_varname = temp_varname
+
+        # we assert that not only the `time` dimensions match, but so do the
+        # (x, y) coordinates
+        if len(self.prec_ds['time']) == len(self.temp_ds['time']):
+            self.num_months = len(self.prec_ds['time'])
+        else:
+            raise ValueError(
+                "Time dimensions of climatological datasets do not match")
 
         # STATE VARIABLES
         # TODO: verbose mode where the state variables are saved for each step
@@ -95,8 +140,19 @@ class StreamSimulation:
         # TODO: self.flux_i
         # TODO: self.time_step
 
-    def simulation_step(self, prec_i, temp_i, year_heat_index, year_alpha,
-                        daylight_hours=12):
+    def simulate(self, year_heat_index, year_alpha):
+        gauge_flow = np.zeros(self.num_months)
+
+        for i in range(self.num_months):
+            gauge_flow[i] = self._simulation_step(
+                self.prec_ds.isel(time=i)[self.prec_varname].values,
+                self.temp_ds.isel(time=i)[self.temp_varname].values,
+                year_heat_index, year_alpha)
+
+        return gauge_flow / self.TIME_STEP
+
+    def _simulation_step(self, prec_i, temp_i, year_heat_index, year_alpha,
+                         daylight_hours=12):
 
         # SNOW
         # snow accumulation from the previous iteration
