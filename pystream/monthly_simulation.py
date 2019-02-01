@@ -5,6 +5,8 @@ import rasterio
 import richdem
 import xarray as xr
 
+from . import plotting, utils
+
 __all__ = ['MonthlySimulation']
 
 
@@ -318,4 +320,20 @@ class MonthlySimulation:
                         self.temp_ds.isel(time=i)[self.temp_varname].values,
                         year_heat_index, year_alpha, next(daylight_hours_pool))
 
-        return gauge_flow / self.TIME_STEP
+        # from m^3 to m^3/s
+        gauge_flow /= self.TIME_STEP
+
+        # set it as class attribute in case they want to plot it later
+        self.gauge_flow = gauge_flow
+
+        return gauge_flow
+
+    def plot_gauge_flow(self, obs_gauge_flow=None, num_warmup_months=6,
+                        **kwargs):
+        return plotting.plot_gauge_flow(
+            self.gauge_flow, obs_gauge_flow=obs_gauge_flow,
+            num_warmup_months=num_warmup_months, **kwargs)
+
+    def nash_sutcliffe(self, obs_gauge_flow, num_warmup_months=6):
+        return utils.nash_sutcliffe(self.gauge_flow[num_warmup_months:],
+                                    obs_gauge_flow[num_warmup_months:])

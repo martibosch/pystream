@@ -130,7 +130,7 @@ class TestMonthlySimulation(unittest.TestCase):
                           self.cropf_fp, self.whc_fp, prec_ds,
                           temp_ds.isel(time=wrong_slice))
 
-    def test_simulate(self):
+    def test_simulation_arguments(self):
         # TODO: it is not correct to instantiate a MonthlySimulation object
         # and call `simulate` many times, since then the state variables (i.e.,
         # snow accumulation, avaiable water and ground water) will not make
@@ -172,10 +172,16 @@ class TestMonthlySimulation(unittest.TestCase):
         # self.assertRaises(ValueError, pst.MonthlySimulation, self.dem_fp,
         #                   self.cropf_fp, self.whc_fp, prec_ds, temp_ds)
 
-        # test that the simulated flow is of the same length as number of
-        # months, and that all the flow values are non-negative
+    def test_simulation_postprocessing(self):
         ms = pst.MonthlySimulation(self.dem_fp, self.cropf_fp, self.whc_fp,
                                    self.prec_fp, self.temp_fp)
-        gauge_flow = ms.simulate()
+        ms.simulate()
+        # test that the attribute 'gauge_flow' is set
+        self.assertTrue(hasattr(ms, 'gauge_flow'))
+        # test that the simulated flow is of the same length as number of
+        # months, and that all the flow values are non-negative
+        gauge_flow = ms.gauge_flow
         self.assertEqual(len(gauge_flow), ms.num_months)
         self.assertTrue(np.all(gauge_flow >= 0))
+        # TODO: test plotting
+        # TODO: test Nash-Sutcliffe
