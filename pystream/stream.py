@@ -1,7 +1,6 @@
 import numpy as np
 import rasterio
 import richdem
-import six
 
 __all__ = ['StreamSimulation']
 
@@ -15,7 +14,7 @@ class StreamSimulation:
         #
 
         # DEM
-        if isinstance(dem, six.string_types):
+        if isinstance(dem, str):
             with rasterio.open(dem) as dem_src:
                 self.dem = richdem.rdarray(
                     dem_src.read(1).astype(np.double), no_data=dem_src.nodata)
@@ -37,7 +36,7 @@ class StreamSimulation:
                     dem.astype(np.double), no_data=nodata)
 
         # CROP FACTOR
-        if isinstance(cropf, six.string_types):
+        if isinstance(cropf, str):
             with rasterio.open(cropf) as cropf_src:
                 self.cropf = cropf_src.read(1)
                 self.res = cropf_src.res  # See comment above `dem_src.res`
@@ -45,7 +44,7 @@ class StreamSimulation:
             self.cropf = cropf
 
         # WATER HOLDING CAPACITY
-        if isinstance(whc, six.string_types):
+        if isinstance(whc, str):
             with rasterio.open(whc) as whc_src:
                 self.whc = whc_src.read(1)
                 self.res = whc_src.res  # See comment above `dem_src.res`

@@ -2,18 +2,28 @@
 
 language: python
 python:
-  - 2.7
   - 3.6
 
-# command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
+before_install:
+  - pip install --upgrade pip
+  - pip install --upgrade wheel
+  - wget http://bit.ly/miniconda -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set show_channel_urls true
+  - conda info --all  
+
 install:
+  - conda env create -n test_env --quiet --file ci/environment-py36.yml
+  - conda activate test_env
+  - conda list
   - pip install -r requirements-dev.txt
   - pip install -r requirements.txt
 
 # command to run tests, e.g. python setup.py test
 script:
-  - tox
-  - coverage run --source pystream -m py.test
+  - coverage run --source pystream -m pytest --verbose
 
 after_success:
   - coverage report -m
