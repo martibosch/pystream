@@ -1,2 +1,5 @@
+matplotlib >= 2.2
 numpy >= 1.13
+rasterio >= 1.0.0
 richdem >= 0.3.4
+xarray >= 0.11.0
