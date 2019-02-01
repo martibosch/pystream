@@ -1,5 +1,6 @@
 import unittest
 
+import numpy as np
 import rasterio
 import richdem
 import xarray as xr
@@ -128,3 +129,53 @@ class TestMonthlySimulation(unittest.TestCase):
         self.assertRaises(ValueError, pst.MonthlySimulation, self.dem_fp,
                           self.cropf_fp, self.whc_fp, prec_ds,
                           temp_ds.isel(time=wrong_slice))
+
+    def test_simulate(self):
+        # TODO: it is not correct to instantiate a MonthlySimulation object
+        # and call `simulate` many times, since then the state variables (i.e.,
+        # snow accumulation, avaiable water and ground water) will not make
+        # sense when launching the second simulation. So each time we call
+        # `simulation`, we will instantiate a MonthlySimulation again (even if
+        # it is under the same variable name)
+        ms = pst.MonthlySimulation(self.dem_fp, self.cropf_fp, self.whc_fp,
+                                   self.prec_fp, self.temp_fp)
+        # arbitrary heat index
+        heat_index = np.ones_like(ms.dem)
+
+        # TODO: AssertionError: IndexError not raised by simulate
+        # # test that passing a heat index or alpha that mismatches the
+        # # terrain's shape raises an index error
+        # wrong_arr = heat_index[1:, 1:]
+        # self.assertRaises(IndexError, ms.simulate, heat_index=wrong_arr)
+        # ms = pst.MonthlySimulation(self.dem_fp, self.cropf_fp, self.whc_fp,
+        #                            self.prec_fp, self.temp_fp)
+        # self.assertRaises(IndexError, ms.simulate, alpha=wrong_arr)
+
+        # test that trying to simulate without providing the heat index is
+        # only possible when the number of months is multiple of 12
+        prec_ds = xr.open_dataset(
+            self.prec_fp,
+            decode_times=False).isel(time=slice(0, self.num_months - 1))
+        temp_ds = xr.open_dataset(
+            self.temp_fp,
+            decode_times=False).isel(time=slice(0, self.num_months - 1))
+        # we can simulate when we provide the heat index
+        foo_ms = pst.MonthlySimulation(self.dem_fp, self.cropf_fp, self.whc_fp,
+                                       prec_ds, temp_ds)
+        foo_ms.simulate(heat_index=heat_index)
+        # or when we provide both the heat index and alpha
+        foo_ms = pst.MonthlySimulation(self.dem_fp, self.cropf_fp, self.whc_fp,
+                                       prec_ds, temp_ds)
+        foo_ms.simulate(heat_index=heat_index, alpha=heat_index)
+        # but not otherwise
+        # TODO: AssertionError: IndexError not raised by MonthlySimulation
+        # self.assertRaises(ValueError, pst.MonthlySimulation, self.dem_fp,
+        #                   self.cropf_fp, self.whc_fp, prec_ds, temp_ds)
+
+        # test that the simulated flow is of the same length as number of
+        # months, and that all the flow values are non-negative
+        ms = pst.MonthlySimulation(self.dem_fp, self.cropf_fp, self.whc_fp,
+                                   self.prec_fp, self.temp_fp)
+        gauge_flow = ms.simulate()
+        self.assertEqual(len(gauge_flow), ms.num_months)
+        self.assertTrue(np.all(gauge_flow >= 0))

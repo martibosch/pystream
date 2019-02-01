@@ -94,6 +94,8 @@ class MonthlySimulation:
                     "If passing raster arrays (instead of filepaths), the "
                     "resolution must be provided!")
 
+        # TODO: global shape class attribute raising ValueError to ensure
+        # consistent shapes?
         if not (self.dem.shape == self.cropf.shape == self.whc.shape):
             raise ValueError("Raster shapes do not match!")
 
@@ -113,7 +115,8 @@ class MonthlySimulation:
 
         # we assert that not only the `time` dimensions match, but so do the
         # (x, y)/(lon, lat) coordinates. TODO: enforce it by raising
-        # ValueError otherwise?
+        # ValueError otherwise? Maybe add a class attribute with the shape
+        # (tuple) of TERRAIN and CLIMATOLOGICAL data
         if len(self.prec_ds['time']) == len(self.temp_ds['time']):
             self.num_months = len(self.prec_ds['time'])
         else:
@@ -133,6 +136,7 @@ class MonthlySimulation:
         self.ground_water = np.zeros(self.dem.shape, dtype=np.double)
 
         # PARAMETERS
+        self.HEAT_COEFF = init_parameters.get('HEAT_COEFF', 1)
         self.TEMP_SNOW_FALL = init_parameters.get('TEMP_SNOW_FALL', 2)
         self.TEMP_SNOW_MELT = init_parameters.get('TEMP_SNOW_MELT', 0)
         self.SNOW_MELT_COEFF = init_parameters.get('SNOW_MELT_COEFF', 15)
@@ -144,17 +148,13 @@ class MonthlySimulation:
         # TODO: self.flux_i
         # TODO: self.time_step
 
-    def simulate(self, year_heat_index, year_alpha):
-        gauge_flow = np.zeros(self.num_months)
+    @staticmethod
+    def _compute_alpha(heat_index):
+        # Thornthwaite (1948)
+        return .49239 + .01792 * heat_index - .0000771771 * heat_index**2 \
+            + .000000675 * heat_index**3
 
-        for i in range(self.num_months):
-            gauge_flow[i] = self._simulation_step(
-                self.prec_ds.isel(time=i)[self.prec_varname].values,
-                self.temp_ds.isel(time=i)[self.temp_varname].values,
-                year_heat_index, year_alpha)
-
-        return gauge_flow / self.TIME_STEP
-
+    # this is the STREAM model's core
     def _simulation_step(self, prec_i, temp_i, year_heat_index, year_alpha,
                          daylight_hours=12):
 
@@ -257,3 +257,47 @@ class MonthlySimulation:
         gauge_flow_i = streamflow_i.max().item()
 
         return gauge_flow_i
+
+    def simulate(self, heat_index=None, alpha=None):
+        gauge_flow = np.zeros(self.num_months)
+
+        if heat_index is not None:
+            if alpha is None:
+                alpha = MonthlySimulation._compute_alpha(heat_index)
+
+            for i in range(self.num_months):
+                gauge_flow[i] = self._simulation_step(
+                    self.prec_ds.isel(time=i)[self.prec_varname].values,
+                    self.temp_ds.isel(time=i)[self.temp_varname].values,
+                    heat_index, alpha)
+        else:
+            # Calculate yearly heat index and alpha using Thornthwaite's
+            # equation
+            num_years = self.num_months // 12
+            if self.num_months % 12 != 0:
+                raise ValueError(
+                    "The heat index can only be computed for an entire year! "
+                    "Ensure that your climatological datasets start have a "
+                    "number of months that is multiple of 12")
+
+            for year in range(num_years):
+                year_first_month = year * 12
+                year_last_month = year_first_month + 12
+                year_temp_ds = self.temp_ds.isel(
+                    time=slice(year_first_month, year_last_month))
+
+                year_heat_index = year_temp_ds[self.temp_varname] \
+                    .groupby('time').apply(lambda temp: (temp / 5) ** 1.514) \
+                    .fillna(0).sum('time').values
+                # in this case, use the coefficient
+                year_heat_index *= self.HEAT_COEFF
+
+                year_alpha = MonthlySimulation._compute_alpha(year_heat_index)
+
+                for i in range(year_first_month, year_last_month):
+                    gauge_flow[i] = self._simulation_step(
+                        self.prec_ds.isel(time=i)[self.prec_varname].values,
+                        self.temp_ds.isel(time=i)[self.temp_varname].values,
+                        year_heat_index, year_alpha)
+
+        return gauge_flow / self.TIME_STEP
