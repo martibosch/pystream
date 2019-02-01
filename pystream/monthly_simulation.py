@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 import rasterio
 import richdem
@@ -33,7 +35,8 @@ class MonthlySimulation:
 
         return ds, varname
 
-    def __init__(self, dem, cropf, whc, prec, temp, prec_varname=None,
+    def __init__(self, dem, cropf, whc, prec, temp,
+                 monthly_daylight_hours=None, prec_varname=None,
                  temp_varname=None, res=None, nodata=-9999, whc_epsilon=.01,
                  decode_times=False, init_parameters={}):
 
@@ -122,6 +125,12 @@ class MonthlySimulation:
         else:
             raise ValueError(
                 "Time dimensions of climatological datasets do not match")
+
+        # OTHER
+
+        # this will be used later in the `simulate` method
+        if monthly_daylight_hours:
+            self.monthly_daylight_hours = monthly_daylight_hours
 
         # STATE VARIABLES
         # TODO: verbose mode where the state variables are saved for each step
@@ -259,6 +268,15 @@ class MonthlySimulation:
         return gauge_flow_i
 
     def simulate(self, heat_index=None, alpha=None):
+
+        # iterator that yields the monthly daylight hours
+        try:
+            daylight_hours_pool = itertools.cycle(self.monthly_daylight_hours)
+        except AttributeError:
+            # if the monthly daylight hours were not provided, we assert that
+            # in every month, every day has 12 hours of light
+            daylight_hours_pool = itertools.cycle([12])
+
         gauge_flow = np.zeros(self.num_months)
 
         if heat_index is not None:
@@ -269,7 +287,7 @@ class MonthlySimulation:
                 gauge_flow[i] = self._simulation_step(
                     self.prec_ds.isel(time=i)[self.prec_varname].values,
                     self.temp_ds.isel(time=i)[self.temp_varname].values,
-                    heat_index, alpha)
+                    heat_index, alpha, next(daylight_hours_pool))
         else:
             # Calculate yearly heat index and alpha using Thornthwaite's
             # equation
@@ -298,6 +316,6 @@ class MonthlySimulation:
                     gauge_flow[i] = self._simulation_step(
                         self.prec_ds.isel(time=i)[self.prec_varname].values,
                         self.temp_ds.isel(time=i)[self.temp_varname].values,
-                        year_heat_index, year_alpha)
+                        year_heat_index, year_alpha, next(daylight_hours_pool))
 
         return gauge_flow / self.TIME_STEP
