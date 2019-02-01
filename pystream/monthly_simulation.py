@@ -10,6 +10,29 @@ class MonthlySimulation:
     # TODO: more flexible approach
     TIME_STEP = 2592000  # i.e., 30 * 24 * 3600 seconds per month
 
+    @staticmethod
+    def _prepare_ds(filepath_or_dataset, varname, decode_times):
+        if isinstance(filepath_or_dataset, str):
+            ds = xr.open_dataset(filepath_or_dataset,
+                                 decode_times=decode_times)
+        elif isinstance(filepath_or_dataset, xr.Dataset):
+            ds = filepath_or_dataset
+        # TODO: raise ValueError if `filepath_or_dataset` is not str nor
+        # xr.Dataset?
+
+        data_vars = ds.data_vars
+        if varname is None:
+            # get the name of the first variable, assert that the user has
+            # provided an appropriate dataset
+            for varname, _ in data_vars.items():
+                break
+        else:
+            if varname not in data_vars:
+                raise ValueError(
+                    f"Variable {varname} must be among {data_vars}")
+
+        return ds, varname
+
     def __init__(self, dem, cropf, whc, prec, temp, prec_varname=None,
                  temp_varname=None, res=None, nodata=-9999, whc_epsilon=.01,
                  decode_times=False, init_parameters={}):
@@ -81,35 +104,16 @@ class MonthlySimulation:
         # TODO: support ndarrays as climatological data?
 
         # PRECIPITATION
-        if isinstance(prec, six.string_types):
-            self.prec_ds = xr.open_dataset(prec, decode_times=decode_times)
-        elif isinstance(prec, xr.Dataset):
-            self.prec_ds = prec
-
-        if prec_varname is None:
-            # get the name of the first variable, assert that the user has
-            # provided an appropriate dataset
-            for prec_varname, _ in self.prec_ds.data_vars.items():
-                break
-
-        self.prec_varname = prec_varname
+        self.prec_ds, self.prec_varname = MonthlySimulation._prepare_ds(
+            prec, prec_varname, decode_times)
 
         # TEMPERATURE
-        if isinstance(temp, six.string_types):
-            self.temp_ds = xr.open_dataset(temp, decode_times=decode_times)
-        elif isinstance(temp, xr.Dataset):
-            self.temp_ds = temp
-
-        if temp_varname is None:
-            # get the name of the first variable, assert that the user has
-            # provided an appropriate dataset
-            for temp_varname, _ in self.temp_ds.data_vars.items():
-                break
-
-        self.temp_varname = temp_varname
+        self.temp_ds, self.temp_varname = MonthlySimulation._prepare_ds(
+            temp, temp_varname, decode_times)
 
         # we assert that not only the `time` dimensions match, but so do the
-        # (x, y) coordinates
+        # (x, y)/(lon, lat) coordinates. TODO: enforce it by raising
+        # ValueError otherwise?
         if len(self.prec_ds['time']) == len(self.temp_ds['time']):
             self.num_months = len(self.prec_ds['time'])
         else:
